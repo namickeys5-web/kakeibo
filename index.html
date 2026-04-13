@@ -208,6 +208,10 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic UI',sans
     <button class="btn btn-o" style="margin-top:0" onclick="openShareModal()">🔗 家族のスマホと共有する</button>
     <div id="family-id-lbl" style="margin-top:10px;font-size:11px;color:var(--hint);text-align:center"></div>
   </div>
+  <div class="card">
+    <div class="ctitle">データ管理</div>
+    <button onclick="resetAllTxs()" style="width:100%;padding:11px;background:none;border:1.5px solid var(--red);border-radius:var(--rs);color:var(--red);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🗑️ 収支データをすべてリセット（資産は保持）</button>
+  </div>
 </div>
 
 <!-- 月次明細 -->
@@ -1625,6 +1629,14 @@ function confirmSim(){
   setTimeout(()=>switchTab('dashboard'),800);
 }
 
+function resetAllTxs(){
+  if(!confirm("収支データをすべて削除します。\n資産データは保持されます。\nよろしいですか？")) return;
+  txs=[];
+  S.save("txs",txs);
+  renderAll();
+  showToast("✅ 収支データをリセットしました");
+}
+
 function resetSim(){
   openM('reset-modal');
 }
@@ -2825,6 +2837,11 @@ function swSalaryCsv(tab, btn) {
 
 init();
 initFirebase();
+setTimeout(function(){
+  if(!S.load("familyId",null)){
+    document.getElementById("family-setup-modal").classList.add("open");
+  }
+},800);
 // familyIdがなければ初回セットアップモーダルを表示
 setTimeout(() => {
   if (!S.load('familyId', null)) {
