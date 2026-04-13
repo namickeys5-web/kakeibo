@@ -946,7 +946,7 @@ const S = {
 const firebaseConfig = {
   apiKey:            "AIzaSyAVHWVUibCsHZSXw-YMmV0aVnWIDfB-RrA",
   authDomain:        "kakeibo-family-8ae41.firebaseapp.com",
-  databaseURL:       "https://kakeibo-family-8ae41-default-rtdb.firebaseio.com",
+  databaseURL:       "https://kakeibo-family-8ae41-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId:         "kakeibo-family-8ae41",
   storageBucket:     "kakeibo-family-8ae41.appspot.com",
   messagingSenderId: "YOUR_SENDER_ID",
@@ -1002,7 +1002,7 @@ function updFamilyIdLbl() {
 }
 
 function initFirebase() {
-  const configured = firebaseConfig.apiKey && firebaseConfig.apiKey !== 'AIzaSyAVHWVUibCsHZSXw-YMmV0aVnWIDfB-RrA';
+  const configured = true; // APIキーが設定済みのため常にFirebaseを有効化
   if (!configured) {
     console.log('Firebase未設定: ローカルモードで動作');
     setSyncDot('offline');
@@ -1020,7 +1020,7 @@ function initFirebase() {
 
   // 接続状態インジケーター
   db.ref('.info/connected').on('value', snap => {
-    if (fbInitialized) setSyncDot(snap.val() ? 'synced' : 'offline');
+    setSyncDot(snap.val() ? 'synced' : 'offline');
   });
 
   if (!familyId) {
@@ -1173,8 +1173,8 @@ function skipFamilySetup() {
 // =====================================
 function openShareModal() {
   if (!fbEnabled) {
-    showToast('⚠️ Firebase未設定です。README_setup.mdを参照してください');
-    return;
+    // Firebase接続中でも共有URLは表示する
+    console.log('Firebase接続待ち中でも共有URLを表示');
   }
   if (!familyId) { showFamilySetup(); return; }
 
@@ -2825,6 +2825,12 @@ function swSalaryCsv(tab, btn) {
 
 init();
 initFirebase();
+// familyIdがなければ初回セットアップモーダルを表示
+setTimeout(() => {
+  if (!S.load('familyId', null)) {
+    showFamilySetup();
+  }
+}, 500);
 </script>
 </body>
 </html>
