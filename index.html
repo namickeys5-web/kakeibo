@@ -29,7 +29,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic UI',sans
 .ni .lb{font-size:9px;color:var(--hint);font-weight:500}
 .ni.active .lb{color:var(--green);font-weight:700}
 
-.main{padding:14px 14px calc(var(--bnavh)+40px)}
+.main{padding:14px 14px calc(var(--bnavh)+16px)}
 .screen{display:none}.screen.active{display:block}
 .card{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:15px;margin-bottom:12px;box-shadow:var(--sh)}
 .ctitle{font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.8px;margin-bottom:12px;text-transform:uppercase}
@@ -532,12 +532,6 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic UI',sans
       <div class="ctitle">カテゴリ別年間支出</div>
       <div id="annual-cat-list"><div class="empty"><div class="ic">📊</div>データがありません</div></div>
     </div>
-  </div>
-
-  <!-- エクスポートボタン -->
-  <div id="annual-export-btns" style="display:flex;gap:8px;margin-bottom:12px">
-    <button onclick="exportAnnualExcel()" style="flex:1;padding:12px;background:var(--green);color:#fff;border:none;border-radius:var(--rs);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📊 Excelで保存</button>
-    <button onclick="exportAnnualPdf()" style="flex:1;padding:12px;background:var(--blue);color:#fff;border:none;border-radius:var(--rs);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📄 PDFで保存</button>
   </div>
 
   <!-- 月別収支 -->
@@ -1324,6 +1318,7 @@ function askDel(id){
 }
 function confirmDel(){
   txs=txs.filter(t=>t.id!==delId); S.save('txs',txs);
+  fbPushTxs(txs); // Firebase にも反映（共有）
   delId=null; closeM('del-modal'); renderAll(); showToast('🗑️ 削除しました');
 }
 
@@ -2827,209 +2822,6 @@ function swSalaryCsv(tab, btn) {
   btn.classList.add('active');
   document.getElementById('scv-amex-panel').style.display    = tab === 'amex'    ? '' : 'none';
   document.getElementById('scv-rakuten-panel').style.display = tab === 'rakuten' ? '' : 'none';
-}
-
-
-// =====================================
-// エクスポート機能
-// =====================================
-function exportAnnualExcel() {
-  const all = getYearTxs();
-  const incTxs = all.filter(t => t.type === 'income');
-  const expTxs = all.filter(t => t.type === 'expense');
-  const specialTxs = expTxs.filter(t => t.special);
-  const normalExpTxs = expTxs.filter(t => !t.special);
-  const totalInc = incTxs.reduce((s,t) => s+t.amount, 0);
-  const totalExp = normalExpTxs.reduce((s,t) => s+t.amount, 0);
-  const totalSpecial = specialTxs.reduce((s,t) => s+t.amount, 0);
-  const saving = totalInc - totalExp - totalSpecial;
-  const rate = totalInc > 0 ? Math.round(saving/totalInc*100) : 0;
-
-  // CSVとして出力（Excelで開ける）
-  const rows = [];
-
-  // ヘッダー
-  rows.push([`${annualYear}年度 年間収支レポート`]);
-  rows.push([]);
-  rows.push(['【年間サマリー】']);
-  rows.push(['収入合計', totalInc]);
-  rows.push(['支出合計（通常）', totalExp]);
-  rows.push(['臨時支出（補填）', totalSpecial]);
-  rows.push(['年間貯蓄', saving]);
-  rows.push(['貯蓄率', rate + '%']);
-  rows.push([]);
-
-  // カテゴリ別
-  rows.push(['【カテゴリ別支出】']);
-  rows.push(['カテゴリ', '金額', '件数']);
-  const ct = {};
-  normalExpTxs.forEach(t => { ct[t.category] = (ct[t.category]||0) + t.amount; });
-  Object.entries(ct).sort((a,b)=>b[1]-a[1]).forEach(([cat, val]) => {
-    const cnt = normalExpTxs.filter(t=>t.category===cat).length;
-    rows.push([cat, val, cnt]);
-  });
-  rows.push([]);
-
-  // 月別
-  rows.push(['【月別収支】']);
-  rows.push(['月', '収入', '支出', '収支']);
-  for (let i = 0; i < 12; i++) {
-    const m = ((3+i)%12)+1;
-    const y = m >= 4 ? annualYear : annualYear+1;
-    const mTxs = all.filter(t => {
-      const d = new Date(t.date);
-      return d.getFullYear()===y && (d.getMonth()+1)===m;
-    });
-    const inc = mTxs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-    const exp = mTxs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-    rows.push([`${y}年${m}月`, inc||'', exp||'', inc||exp ? inc-exp : '']);
-  }
-  rows.push([]);
-
-  // 臨時支出
-  if (specialTxs.length > 0) {
-    rows.push(['【臨時支出（セブン銀行補填）】']);
-    rows.push(['日付', '内容', 'カテゴリ', '金額']);
-    specialTxs.sort((a,b)=>a.date.localeCompare(b.date)).forEach(t => {
-      rows.push([t.date, t.memo||t.category, t.category, t.amount]);
-    });
-    rows.push([]);
-  }
-
-  // 資産データ
-  const assets = S.load('assets', []);
-  if (assets.length > 0) {
-    rows.push(['【資産推移】']);
-    rows.push(['日付', '日本円貯蓄', '楽天証券', 'HSBC(HKD)', 'FHB(USD)', 'ITA(USD)', 'BMI(USD)', 'USD/JPY', 'HKD/JPY', '資産総額']);
-    assets.sort((a,b)=>a.date.localeCompare(b.date)).forEach(r => {
-      rows.push([r.date, r.jpy, r.rakuten||0, r.hsbc, r.fhb, r.ita, r.bmi, r.usdJpy, r.hkdJpy, r.total]);
-    });
-  }
-
-  // CSV生成（BOM付きでExcelが文字化けしない）
-  const bom = '\uFEFF';
-  const csv = bom + rows.map(row =>
-    row.map(cell => {
-      const s = String(cell ?? '');
-      return s.includes(',') || s.includes('"') || s.includes('\n')
-        ? '"' + s.replace(/"/g,'""') + '"'
-        : s;
-    }).join(',')
-  ).join('\n');
-
-  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `家計簿_${annualYear}年度.csv`;
-  a.click();
-  showToast('✅ CSVをダウンロードしました（Excelで開けます）');
-}
-
-function exportAnnualPdf() {
-  const all = getYearTxs();
-  const incTxs = all.filter(t => t.type === 'income');
-  const expTxs = all.filter(t => t.type === 'expense');
-  const specialTxs = expTxs.filter(t => t.special);
-  const normalExpTxs = expTxs.filter(t => !t.special);
-  const totalInc = incTxs.reduce((s,t) => s+t.amount, 0);
-  const totalExp = normalExpTxs.reduce((s,t) => s+t.amount, 0);
-  const totalSpecial = specialTxs.reduce((s,t) => s+t.amount, 0);
-  const saving = totalInc - totalExp - totalSpecial;
-  const rate = totalInc > 0 ? Math.round(saving/totalInc*100) : 0;
-
-  // カテゴリ別
-  const ct = {};
-  normalExpTxs.forEach(t => { ct[t.category]=(ct[t.category]||0)+t.amount; });
-  const catRows = Object.entries(ct).sort((a,b)=>b[1]-a[1])
-    .map(([cat,val]) => `<tr><td>${cat}</td><td style="text-align:right">${fmt(val)}円</td><td style="text-align:right">${totalInc>0?Math.round(val/totalInc*100):0}%</td></tr>`).join('');
-
-  // 月別
-  const monthRows = [];
-  for (let i = 0; i < 12; i++) {
-    const m = ((3+i)%12)+1;
-    const y = m >= 4 ? annualYear : annualYear+1;
-    const mTxs = all.filter(t=>{const d=new Date(t.date);return d.getFullYear()===y&&(d.getMonth()+1)===m;});
-    const inc = mTxs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-    const exp = mTxs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-    const bal = inc - exp;
-    if (inc || exp) {
-      monthRows.push(`<tr><td>${y}年${m}月</td><td style="text-align:right;color:#2d6a4f">${inc?fmt(inc)+'円':'-'}</td><td style="text-align:right;color:#c0392b">${exp?fmt(exp)+'円':'-'}</td><td style="text-align:right;color:${bal>=0?'#2d6a4f':'#c0392b'}">${inc||exp?(bal>=0?'+':'')+fmt(bal)+'円':'-'}</td></tr>`);
-    }
-  }
-
-  // 資産最新
-  const assets = S.load('assets', []);
-  const latestAsset = assets.length ? [...assets].sort((a,b)=>b.date.localeCompare(a.date))[0] : null;
-
-  const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
-<title>${annualYear}年度 家計簿レポート</title>
-<style>
-  body{font-family:'Hiragino Kaku Gothic ProN','Yu Gothic UI',sans-serif;margin:0;padding:24px;color:#1a1a18;font-size:13px}
-  h1{font-size:20px;margin-bottom:4px;color:#1a1a18}
-  .sub{color:#6b6860;font-size:12px;margin-bottom:24px}
-  h2{font-size:14px;font-weight:700;margin:20px 0 8px;padding-bottom:4px;border-bottom:2px solid #2d6a4f;color:#2d6a4f}
-  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:8px}
-  .kpi{background:#f9f8f5;border-radius:8px;padding:12px;text-align:center}
-  .kpi .lb{font-size:11px;color:#6b6860;margin-bottom:4px}
-  .kpi .vl{font-size:20px;font-weight:700}
-  .inc{color:#2d6a4f}.exp{color:#c0392b}.sav{color:#e07b39}
-  table{width:100%;border-collapse:collapse;margin-bottom:8px}
-  th{background:#f0f0ec;padding:7px 10px;text-align:left;font-size:12px;font-weight:700}
-  td{padding:6px 10px;border-bottom:1px solid #e8e5de;font-size:12px}
-  .asset-box{background:#1e3a5f;color:#fff;border-radius:8px;padding:16px;margin-bottom:8px}
-  .asset-box .lb{font-size:12px;opacity:.75;margin-bottom:4px}
-  .asset-box .vl{font-size:28px;font-weight:700}
-  @media print{body{padding:12px}button{display:none}}
-</style>
-</head><body>
-<h1>${annualYear}年度 家計簿レポート</h1>
-<div class="sub">出力日：${new Date().toLocaleDateString('ja-JP')}</div>
-
-<h2>年間サマリー</h2>
-<div class="kpi-grid">
-  <div class="kpi"><div class="lb">収入合計</div><div class="vl inc">${fmt(totalInc)}円</div></div>
-  <div class="kpi"><div class="lb">支出合計</div><div class="vl exp">${fmt(totalExp)}円</div></div>
-  <div class="kpi"><div class="lb">年間貯蓄</div><div class="vl sav">${fmt(saving)}円</div></div>
-  <div class="kpi"><div class="lb">貯蓄率</div><div class="vl" style="color:#2c3e9a">${rate}%</div></div>
-</div>
-${totalSpecial > 0 ? `<p style="font-size:12px;color:#e07b39">※ 臨時支出（セブン銀行補填）${fmt(totalSpecial)}円を含む</p>` : ''}
-
-<h2>カテゴリ別支出</h2>
-<table><tr><th>カテゴリ</th><th style="text-align:right">金額</th><th style="text-align:right">収入比</th></tr>${catRows}</table>
-
-<h2>月別収支</h2>
-<table><tr><th>月</th><th style="text-align:right">収入</th><th style="text-align:right">支出</th><th style="text-align:right">収支</th></tr>${monthRows.join('')}</table>
-
-${latestAsset ? `
-<h2>資産状況（最新：${latestAsset.date}）</h2>
-<div class="asset-box">
-  <div class="lb">資産総額</div>
-  <div class="vl">${fmt(latestAsset.total)}円</div>
-</div>
-<table>
-  <tr><th>項目</th><th style="text-align:right">残高</th><th style="text-align:right">円換算</th></tr>
-  <tr><td>日本円貯蓄</td><td style="text-align:right">−</td><td style="text-align:right">${fmt(latestAsset.jpy)}円</td></tr>
-  <tr><td>楽天証券</td><td style="text-align:right">−</td><td style="text-align:right">${fmt(latestAsset.rakuten||0)}円</td></tr>
-  <tr><td>HSBC銀行（HKD）</td><td style="text-align:right">${latestAsset.hsbc.toLocaleString()} HKD</td><td style="text-align:right">${fmt(Math.round(latestAsset.hsbc*latestAsset.hkdJpy))}円</td></tr>
-  <tr><td>FHB銀行（USD）</td><td style="text-align:right">${latestAsset.fhb.toLocaleString()} USD</td><td style="text-align:right">${fmt(Math.round(latestAsset.fhb*latestAsset.usdJpy))}円</td></tr>
-  <tr><td>ITA（USD）</td><td style="text-align:right">${latestAsset.ita.toLocaleString()} USD</td><td style="text-align:right">${fmt(Math.round(latestAsset.ita*latestAsset.usdJpy))}円</td></tr>
-  <tr><td>BMI解約返戻金（USD）</td><td style="text-align:right">${latestAsset.bmi.toLocaleString()} USD</td><td style="text-align:right">${fmt(Math.round(latestAsset.bmi*latestAsset.usdJpy))}円</td></tr>
-  <tr><td colspan="2" style="font-weight:700">為替レート</td><td style="text-align:right;font-size:11px;color:#6b6860">USD ${latestAsset.usdJpy}円 / HKD ${latestAsset.hkdJpy}円</td></tr>
-</table>` : ''}
-
-<div style="text-align:center;margin-top:24px">
-  <button onclick="window.print()" style="padding:12px 32px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🖨️ 印刷 / PDFで保存</button>
-</div>
-</body></html>`;
-
-  const w = window.open('', '_blank');
-  if (w) {
-    w.document.write(html);
-    w.document.close();
-    setTimeout(() => w.print(), 800);
-  } else {
-    showToast('⚠️ ポップアップをブロックされています。ブラウザの設定で許可してください');
-  }
 }
 
 init();
