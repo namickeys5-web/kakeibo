@@ -866,6 +866,7 @@ const CATS = [
   {id:'衣類・美容',  ic:'👗', bg:'#fdf6ec', cl:'#c07830'},
   {id:'保険・投資',  ic:'🛡️', bg:'#e8f5e9', cl:'#2d6a4f'},
   {id:'車両費',      ic:'🚗', bg:'#e0f2fe', cl:'#0369a1'},
+  {id:'その他雑費',  ic:'📦', bg:'#f5f5f4', cl:'#78716c'},
 ];
 
 const PRESET_ASSETS = [
@@ -1701,7 +1702,7 @@ function guessCategory(shopName) {
   for (const rule of CAT_RULES) {
     if (rule.pattern.test(name)) return rule.cat;
   }
-  return 'その他';  // マッチなし
+  return 'その他雑費';  // マッチなし
 }
 
 // 全角数字・カンマ → 数値
@@ -1845,7 +1846,7 @@ function renderAmexPreview() {
     const d = row.date.split('-');
     const dateLabel = `${parseInt(d[1])}/${parseInt(d[2])}`;
     // select は value を JS で後から設定するためシンプルに全options列挙
-    const allCats = [...CATS.map(c => c.id), 'その他'];
+    const allCats = CATS.map(c => c.id);
     const opts = allCats.map(id => `<option value="${id}">${id}</option>`).join('');
     return `<div style="display:grid;grid-template-columns:20px 48px 1fr 1fr 72px;gap:5px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
       <input type="checkbox" ${row.include ? 'checked' : ''} data-idx="${i}" onchange="toggleAmexRow(${i},this.checked)" style="width:16px;height:16px;accent-color:var(--green)">
@@ -1892,7 +1893,7 @@ function saveAmexImport() {
   toSave.forEach(r => {
     ids.amex++;
     const id = ids.amex;
-    const allCats = [...CATS.map(c => c.id), 'その他'];
+    const allCats = CATS.map(c => c.id);
     const opts = allCats.map(c => `<option value="${c}">${c}</option>`).join('');
     const escaped = r.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
     const html = `<div class="irow" id="irow-amex-${id}">
@@ -2071,7 +2072,7 @@ function loadRakutenRowsToSalary(rows) {
   rows.forEach(r => {
     ids.rakuten++;
     const id = ids.rakuten;
-    const opts = [...CATS.map(c => c.id), 'その他']
+    const opts = CATS.map(c => c.id)
       .map(c => `<option value="${c}">${c}</option>`).join('');
     const escaped = r.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
     document.getElementById('rakuten-rows').insertAdjacentHTML('beforeend',
@@ -2098,7 +2099,7 @@ let rakutenRowId = 0;
 function addRakutenRow(defDate, defName, defCat, defAmt) {
   rakutenRowId++;
   const id = rakutenRowId;
-  const allCats = [...CATS.map(c => c.id), 'その他'];
+  const allCats = CATS.map(c => c.id);
   const opts = allCats.map(c => `<option value="${c}">${c}</option>`).join('');
   const rowHtml = `<div style="display:grid;grid-template-columns:65px 1fr 1fr 80px 24px;gap:5px;margin-bottom:7px;align-items:center" id="rrow-${id}">
     <input type="date" id="rdate-${id}" class="i-memo" style="padding:6px 4px;font-size:11px" value="${defDate || today()}" oninput="calcRakutenTotal()">
@@ -2147,7 +2148,7 @@ function parsePastedText() {
       .replace(/1回払い|リボ|分割|本人\*?|家族\*?|口座振替|返済/g, '')
       .replace(/円/g, '')
       .replace(/\s+/g, ' ').trim();
-    if (!shop || shop.length < 2) shop = 'その他';
+    if (!shop || shop.length < 2) shop = 'その他雑費';
 
     rows.push({
       date,
@@ -2196,7 +2197,7 @@ function saveRakutenManual() {
   rows.forEach(r => {
     ids.rakuten++;
     const id = ids.rakuten;
-    const allCats = [...CATS.map(c => c.id), 'その他'];
+    const allCats = CATS.map(c => c.id);
     const opts = allCats.map(c => `<option value="${c}">${c}</option>`).join('');
     const escaped = r.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
     const html = `<div class="irow" id="irow-rakuten-${id}">
@@ -2395,7 +2396,7 @@ let rakutenRowId2 = 0;
 function addRakutenRow2(defDate, defName, defCat, defAmt) {
   rakutenRowId2++;
   const id = rakutenRowId2;
-  const opts = [...CATS.map(c => c.id), 'その他'].map(c => `<option value="${c}">${c}</option>`).join('');
+  const opts = CATS.map(c => c.id).map(c => `<option value="${c}">${c}</option>`).join('');
   document.getElementById('rakuten-manual-rows2').insertAdjacentHTML('beforeend',
     `<div style="display:grid;grid-template-columns:65px 1fr 1fr 80px 24px;gap:5px;margin-bottom:7px;align-items:center" id="rrow2-${id}">
       <input type="date" id="rdate2-${id}" class="i-memo" style="padding:6px 4px;font-size:11px" value="${defDate||today()}">
@@ -2433,7 +2434,7 @@ function parsePastedText2() {
     const date = dateM ? normalizeDate(dateM[0]) : today();
     let shop = line.replace(/\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/g,'').replace(/[\d,]+/g,'')
       .replace(/1回払い|リボ|分割|本人\*?|家族\*?|口座振替|返済|円/g,'').replace(/\s+/g,' ').trim();
-    if (!shop || shop.length < 2) shop = 'その他';
+    if (!shop || shop.length < 2) shop = 'その他雑費';
     rows.push({ date, name: normalizeName(shop), amount, category: guessCategory(shop) });
   }
   if (!rows.length) { showToast('⚠️ 読み取れませんでした'); return; }
@@ -2459,7 +2460,7 @@ function saveRakutenManual2() {
   rows.forEach(r => {
     ids.rakuten++;
     const id = ids.rakuten;
-    const opts = [...CATS.map(c=>c.id),'その他'].map(c=>`<option value="${c}">${c}</option>`).join('');
+    const opts = CATS.map(c=>c.id).map(c=>`<option value="${c}">${c}</option>`).join('');
     const escaped = r.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
     document.getElementById('rakuten-rows').insertAdjacentHTML('beforeend',
       `<div class="irow" id="irow-rakuten-${id}">
