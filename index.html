@@ -395,7 +395,7 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic UI',sans
         <span class="sim-yen">円</span>
       </div>
       <div class="sim-row" style="background:var(--surface2);border-radius:var(--rs);padding:10px;margin-top:4px">
-        <div class="sim-lbl" style="font-size:12px;color:var(--sub)">✉️ 封筒生活費（自動計算）</div>
+        <div class="sim-lbl" style="font-size:12px;color:var(--sub)">💰 今月の手元現金（自動計算）</div>
         <span style="font-size:16px;font-weight:700;color:var(--text)" id="env-auto">−円</span>
       </div>
     </div>
@@ -467,10 +467,10 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic UI',sans
 
       <div class="alloc-row">
         <div>
-          <div class="alloc-lbl">封筒に入れる</div>
-          <div class="alloc-sub">現金生活費</div>
+          <div class="alloc-lbl">今月の手元現金（封筒）</div>
+          <div class="alloc-sub">友・香の残金合計 ― 貯蓄目標</div>
         </div>
-        <div class="alloc-amt neg" id="alloc-env">−円</div>
+        <div class="alloc-amt" id="alloc-env">−円</div>
       </div>
 
       <div class="alloc-row highlight">
@@ -493,6 +493,11 @@ body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic UI',sans
       </div>
     </div>
 
+    <div style="background:var(--surface2);border-radius:var(--rs);padding:12px 14px;margin-top:12px;border:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--sub);margin-bottom:8px;font-weight:700">📅 何月分として登録しますか？</div>
+      <select id="sim-period-sel" class="fsel" style="font-size:15px;font-weight:700;color:var(--green)"></select>
+      <div style="font-size:11px;color:var(--hint);margin-top:6px" id="sim-period-hint"></div>
+    </div>
     <button class="btn btn-g" onclick="confirmSim()">✅ 確定して月次明細に登録する</button>
     <button class="btn btn-o" onclick="resetSim()">🔄 やり直す</button>
   </div>
@@ -865,6 +870,7 @@ const CATS = [
   {id:'娯楽・サブスク',ic:'🎮',bg:'#e8eaf6', cl:'#3949ab'},
   {id:'衣類・美容',  ic:'👗', bg:'#fdf6ec', cl:'#c07830'},
   {id:'保険・投資',  ic:'🛡️', bg:'#e8f5e9', cl:'#2d6a4f'},
+  {id:'住居費',      ic:'🏠', bg:'#fef9c3', cl:'#854d0e'},
   {id:'車両費',      ic:'🚗', bg:'#e0f2fe', cl:'#0369a1'},
   {id:'その他雑費',  ic:'📦', bg:'#f5f5f4', cl:'#78716c'},
 ];
@@ -1387,18 +1393,20 @@ function renderDash(){
         <div class="ra">${fmt(val)}円</div></div>`;
     }).join('');
   }
-  const rec=[...all].sort((a,b)=>b.id-a.id).slice(0,5);
+  const rec=[...all].filter(t=>t.memo!=='封筒生活費').sort((a,b)=>b.id-a.id).slice(0,5);
   document.getElementById('recent').innerHTML=rec.length?rec.map(t=>txRow(t,false)).join(''):'<div class="empty"><div class="ic">📋</div>取引を入力するとここに表示されます</div>';
 }
 
 function renderMonthly(){
   const all=monthTxs();
-  let filtered=mTab==='expense'?all.filter(t=>t.type==='expense'):mTab==='income'?all.filter(t=>t.type==='income'):[...all];
+  // 封筒生活費は「残金メモ」なので明細からは除外
+  const allReal = all.filter(t => t.memo !== '封筒生活費');
+  let filtered=mTab==='expense'?allReal.filter(t=>t.type==='expense'):mTab==='income'?allReal.filter(t=>t.type==='income'):[...allReal];
   filtered.sort((a,b)=>b.id-a.id);
   const catCard=document.getElementById('cat-card');
   if(mTab==='expense'){
     catCard.style.display='';
-    const exps=all.filter(t=>t.type==='expense');
+    const exps=allReal.filter(t=>t.type==='expense');
     const total=exps.reduce((s,t)=>s+t.amount,0);
     const ct={}; exps.forEach(t=>{ct[t.category]=(ct[t.category]||0)+t.amount;});
     const sorted=Object.entries(ct).sort((a,b)=>b[1]-a[1]);
@@ -1548,8 +1556,8 @@ function calcSim(){
   // 香給与の振り分け
   const sevenTarget=parseInt(document.getElementById('s-env').value||'0',10)||0; // 貯蓄目標（手入力）
   const kohAfterJoyo=s2-joyoFromKoh;    // 常陽補填後
-  // 封筒 = 香給与残り - 貯蓄目標 - 特別補填
-  const env=Math.max(0, kohAfterJoyo-sevenTarget); // 封筒（自動計算）※補填はセブン銀行から出るので除外
+  // 封筒（今月の手元現金）= 友給与の残り + 香給与残り − 貯蓄目標
+  const env = tomoRemain + kohAfterJoyo - sevenTarget;
 
   // 支出合計 = カード明細 + 口座引き落とし（封筒・貯蓄・補填は含めない）
   const totalExpAll=rakutenNormal+amexNormal+oricoNormal+bankTotal;
@@ -1594,9 +1602,11 @@ function calcSim(){
     document.getElementById('koh-joyo-sub').textContent=`友給与で ${fmt(joyoFromTomo)}円 賄い、残り ${fmt(joyoFromKoh)}円 を香給与から常陽へ`;
   } else { kjRow.style.display='none'; }
 
-  // 封筒（自動計算値）を表示
-  document.getElementById('alloc-env').textContent=env?fmt(env)+'円':'0円';
-  document.getElementById('env-auto').textContent=env?fmt(env)+'円':'0円';
+  // 封筒（今月の手元現金残）を表示
+  const envEl = document.getElementById('alloc-env');
+  envEl.textContent = fmt(Math.abs(env)) + '円';
+  envEl.className = 'alloc-amt ' + (env >= 0 ? 'pos' : 'neg');
+  document.getElementById('env-auto').textContent = (env >= 0 ? '' : '▲ ') + fmt(Math.abs(env)) + '円';
   // セブン銀行（入力した貯蓄目標）を表示
   document.getElementById('alloc-seven').textContent=(sevenTarget>=0?'+':'')+fmt(sevenTarget)+'円';
   document.getElementById('alloc-seven').className='alloc-amt '+(sevenTarget>=0?'pos':'neg');
@@ -1631,39 +1641,21 @@ function confirmSim(){
   addExpRows('orico','オリコカード');
   addExpRows('bank','口座引き落とし');
 
-  // 封筒は自動計算（貯蓄目標から逆算）
-  const sevenTgt=parseInt(document.getElementById('s-env').value||'0',10)||0;
-  const amexRowsC=getRows('amex'); const rakutenRowsC=getRows('rakuten');
-  const oricoRowsC=getRows('orico'); const bankRowsC=getRows('bank');
-  const spTotalC=[...amexRowsC,...rakutenRowsC,...oricoRowsC].filter(r=>r.special).reduce((s,r)=>s+r.amt,0);
-  const s1c=parseInt(document.getElementById('s-s1').value||'0',10)||0;
-  const s2c=parseInt(document.getElementById('s-s2').value||'0',10)||0;
-  const rakutenNormalC=rakutenRowsC.filter(r=>!r.special).reduce((s,r)=>s+r.amt,0);
-  const amexNormalC=amexRowsC.filter(r=>!r.special).reduce((s,r)=>s+r.amt,0);
-  const oricoNormalC=oricoRowsC.filter(r=>!r.special).reduce((s,r)=>s+r.amt,0);
-  const bankTotalC=bankRowsC.reduce((s,r)=>s+r.amt,0);
-  const joyoNeedC=amexNormalC+oricoNormalC+bankTotalC;
-  const tomoAfterC=s1c-rakutenNormalC;
-  const joyoFromKohC=tomoAfterC>=joyoNeedC?0:Math.max(0,joyoNeedC-Math.max(0,tomoAfterC));
-  const kohAfterJoyoC=s2c-joyoFromKohC;
-  const env=Math.max(0, kohAfterJoyoC-sevenTgt); // 補填はセブンから出るので封筒に影響しない
-  if(env>0) newTxs.push({id:Date.now()+(seq++),type:'expense',amount:env,category:'食費',memo:'封筒生活費',date:td,payment:'現金・封筒',source:'salary'});
+  // 封筒（今月の手元現金）は参考表示のみ。取引としては登録しない。
+  // 金額は給料日シミュレーター画面の「今月の手元現金」欄を参照してください。
 
   if(!newTxs.length){showToast('⚠️ 入力された金額がありません');return;}
 
-  // ── 締め日ログを記録 ──
-  // 確定ボタンを押した日 = 翌月分の期間スタート（例：4/25押し → 5月分）
-  const pressDate  = new Date();
-  const labelDate  = new Date(pressDate.getFullYear(), pressDate.getMonth() + 1, 1);
-  const pY = labelDate.getFullYear();
-  const pM = labelDate.getMonth() + 1;
+  // ── 締め日ログを記録（セレクタで選んだ月を使う）──
+  const selVal = document.getElementById('sim-period-sel').value; // 'YYYY-M'
+  const [pY, pM] = selVal.split('-').map(Number);
   const pps = S.load('payperiods', []);
   if (!pps.find(p => p.y === pY && p.m === pM)) {
     pps.push({ start: td, y: pY, m: pM });
     pps.sort((a, b) => a.start.localeCompare(b.start));
     S.save('payperiods', pps);
   }
-  // 表示を新しい期間（翌月分）に切り替え
+  // 表示を選択した期間に切り替え
   period = { y: pY, m: pM };
   S.save('period', period);
   updPeriodLbl();
@@ -1672,6 +1664,49 @@ function confirmSim(){
   renderAll();
   showToast(`✅ ${newTxs.length}件を${pY}年${pM}月分に登録しました`);
   setTimeout(()=>switchTab('dashboard'),800);
+}
+
+// 「何月分」セレクタを初期化
+function initSimPeriodSel() {
+  const sel  = document.getElementById('sim-period-sel');
+  const hint = document.getElementById('sim-period-hint');
+  if (!sel) return;
+
+  // 選択肢：前月・今月・翌月・翌々月（直近4ヶ月）
+  const now = new Date();
+  const opts = [];
+  for (let i = -1; i <= 2; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    opts.push({ y: d.getFullYear(), m: d.getMonth() + 1 });
+  }
+
+  // デフォルト：20日以降なら翌月、それ以前なら当月
+  const defaultOffset = now.getDate() >= 20 ? 1 : 0;
+  const def = opts[1 + defaultOffset]; // opts[1]=今月, opts[2]=翌月
+
+  sel.innerHTML = opts.map(o => {
+    const val = `${o.y}-${o.m}`;
+    const lbl = `${o.y}年${o.m}月分`;
+    const selected = (o.y === def.y && o.m === def.m) ? ' selected' : '';
+    return `<option value="${val}"${selected}>${lbl}</option>`;
+  }).join('');
+
+  // 既に登録済みの期間は薄く表示
+  const pps = S.load('payperiods', []);
+  sel.addEventListener('change', () => updateSimPeriodHint(sel, pps, hint));
+  updateSimPeriodHint(sel, pps, hint);
+}
+
+function updateSimPeriodHint(sel, pps, hint) {
+  if (!hint) return;
+  const [y, m] = sel.value.split('-').map(Number);
+  if (pps.find(p => p.y === y && p.m === m)) {
+    hint.textContent = '⚠️ この月はすでに登録済みです。上書き登録されます。';
+    hint.style.color = 'var(--orange)';
+  } else {
+    hint.textContent = '給料日ボタンを押した日が、この期間のスタート日になります。';
+    hint.style.color = 'var(--hint)';
+  }
 }
 
 function resetSim(){
@@ -1686,6 +1721,7 @@ function doReset(){
   ids.extra=0;
   document.getElementById('sim-result').style.display='none';
   closeM('reset-modal');
+  initSimPeriodSel();
   showToast('🔄 リセットしました');
 }
 
@@ -1700,6 +1736,7 @@ function switchTab(tab){
   const navEl = document.getElementById('nav-'+tab);
   if(navEl) navEl.classList.add('active');
   if(tab==='annual') renderAnnual();
+  if(tab==='salary') initSimPeriodSel();
 }
 function swMTab(tab,btn){
   mTab=tab;
@@ -1737,6 +1774,7 @@ const CAT_RULES = [
   { pattern: /ゲーム|NINTENDO|任天堂|PlayStation|Xbox|Steam/, cat: '娯楽・サブスク' },
   { pattern: /コンビニ|セブン-イレブン|ローソン|ファミリーマート|ミニストップ/, cat: '日用品' },
   { pattern: /ホームセンター|カインズ|コメリ|ニトリ|IKEA|家具|雑貨/, cat: '日用品' },
+  { pattern: /家賃|賃料|管理費|住宅ローン|修繕|リフォーム|引越|住居/, cat: '住居費' },
   { pattern: /ガソリン|給油|オートバックス|イエローハット|車検|タイヤ|カーディーラー|ディーラー|車両|駐車場|コイン[　\s]*パーキング|パーキング|ETC|高速道路|カーローン/, cat: '車両費' },
 ];
 
