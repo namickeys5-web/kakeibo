@@ -1185,37 +1185,49 @@ function skipFamilySetup() {
 // 共有URL・QRコード
 // =====================================
 function openShareModal() {
-  // familyId がなければここで自動生成（Firebase設定前でもURLは発行できる）
-  if (!familyId) {
-    familyId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-      const r = Math.random() * 16 | 0;
-      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-    });
-    S.save('familyId', familyId);
-    updFamilyIdLbl();
-    // Firebase同期を開始
-    if (db) startFbSync();
+  try {
+    // familyId がなければここで自動生成
+    if (!familyId) {
+      familyId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+      S.save('familyId', familyId);
+      updFamilyIdLbl();
+    }
+
+    // まずモーダルを開く（Firebase処理より先）
+    const shareUrl = (location.protocol === 'file:')
+      ? 'https://kakeibo-family-8ae41.web.app/?family=' + familyId
+      : location.origin + location.pathname + '?family=' + familyId;
+    document.getElementById('share-url-text').value = shareUrl;
+
+    // Firebase未設定の場合は注意書きを表示
+    const fbNote = document.getElementById('share-fb-note');
+    if (fbNote) fbNote.style.display = fbEnabled ? 'none' : '';
+
+    // QRコード生成
+    const qrEl = document.getElementById('share-qr');
+    qrEl.innerHTML = '';
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(qrEl, { text: shareUrl, width: 180, height: 180,
+        colorDark: '#1a1a18', colorLight: '#ffffff' });
+    } else {
+      qrEl.innerHTML = '<div style="font-size:11px;color:var(--hint);text-align:center;padding:12px">QRコードを読み込み中...</div>';
+    }
+
+    document.getElementById('share-modal').classList.add('open');
+
+    // Firebase同期を開始（モーダル表示後）
+    try {
+      if (db && familyId) startFbSync();
+    } catch(e) {
+      console.warn('Firebase sync error:', e);
+    }
+  } catch(e) {
+    console.error('openShareModal error:', e);
+    alert('共有モーダルを開く際にエラーが発生しました: ' + e.message);
   }
-
-  const shareUrl = location.origin + location.pathname + '?family=' + familyId;
-  document.getElementById('share-url-text').value = shareUrl;
-
-  // Firebase未設定の場合は注意書きを表示
-  const fbNote = document.getElementById('share-fb-note');
-  if (fbNote) fbNote.style.display = fbEnabled ? 'none' : '';
-
-  // QRコード生成
-  const qrEl = document.getElementById('share-qr');
-  qrEl.innerHTML = '';
-  if (typeof QRCode !== 'undefined') {
-    new QRCode(qrEl, { text: shareUrl, width: 180, height: 180,
-      colorDark: '#1a1a18', colorLight: '#ffffff' });
-  } else {
-    // QRCode.jsが未ロードの場合はURLのみ表示
-    qrEl.innerHTML = '<div style="font-size:11px;color:var(--hint);text-align:center;padding:12px">QRコードを読み込み中...</div>';
-  }
-
-  document.getElementById('share-modal').classList.add('open');
 }
 
 function copyShareUrl() {
